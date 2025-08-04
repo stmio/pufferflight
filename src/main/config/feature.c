@@ -96,6 +96,7 @@ uint32_t featuresSupportedByBuild =
     | FEATURE_ESC_SENSOR
 #endif
     | FEATURE_ANTI_GRAVITY // always available
+    | FEATURE_RAW_MOTOR_CONTROL
     ;
 
 static uint32_t runtimeFeatureMask;

@@ -70,6 +70,7 @@
 
 #include "flight/imu.h"
 #include "flight/mixer.h"
+#include "flight/mixer_init.h"
 #include "flight/pid.h"
 #include "flight/position.h"
 #include "flight/rpm_filter.h"
@@ -1372,6 +1373,11 @@ FAST_CODE void taskMainPidLoop(timeUs_t currentTimeUs)
     if (lockMainPID() != 0) return;
 #endif
 
+    if (featureIsEnabled(FEATURE_RAW_MOTOR_CONTROL)) {
+        processRawMotorControl();
+        return;
+    }
+
     // DEBUG_PIDLOOP, timings for:
     // 0 - gyroUpdate()
     // 1 - subTaskPidController()
@@ -1415,4 +1421,31 @@ bool isLaunchControlActive(void)
 #else
     return false;
 #endif
+}
+
+void processRawMotorControl(void)
+{
+    if (!ARMING_FLAG(ARMED)) {
+        for (int i = 0; i < getMotorCount(); i++) {
+            motor[i] = motor_disarmed[i];
+        }
+
+        writeMotors();
+        return;
+    }
+
+    if (failsafeIsActive()) {
+        stopMotors();
+        return;
+    }
+
+    for (int i = 0; i < getMotorCount(); i++) {
+        float rcValue = constrainf(rcData[i], PWM_RANGE_MIN, PWM_RANGE_MAX);
+        float motorOutput = scaleRangef(rcValue, 
+                                       PWM_RANGE_MIN, PWM_RANGE_MAX,
+                                       getMotorOutputLow(), getMotorOutputHigh());
+        motor[i] = motorOutput;
+    }
+
+    writeMotors();
 }

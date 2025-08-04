@@ -254,6 +254,7 @@ static const char * const featureNames[] = {
     _R(FEATURE_RX_SPI, "RX_SPI"),
     _R(FEATURE_ESC_SENSOR, "ESC_SENSOR"),
     _R(FEATURE_ANTI_GRAVITY, "ANTI_GRAVITY"),
+    _R(FEATURE_RAW_MOTOR_CONTROL, "RAW_MOTOR_CONTROL")
 };
 #undef _R
 
