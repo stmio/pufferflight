@@ -67,6 +67,8 @@
 #include "sensors/battery.h"
 #include "sensors/sensors.h"
 #include "sensors/barometer.h"
+#include "sensors/acceleration.h"
+#include "sensors/gyro.h"
 
 #include "telemetry/telemetry.h"
 #include "telemetry/msp_shared.h"
@@ -79,6 +81,7 @@
 
 #define CRSF_MSP_BUFFER_SIZE 96
 #define CRSF_MSP_LENGTH_OFFSET 1
+
 
 static bool crsfTelemetryEnabled;
 static bool deviceInfoReplyPending;
@@ -436,6 +439,47 @@ static void crsfFrameAttitude(sbuf_t *dst)
 }
 
 /*
+0x1B Sensor data (Gyro/Acc)
+Payload:
+int16_t     acc_x ( milliG )
+int16_t     acc_y ( milliG )  
+int16_t     acc_z ( milliG )
+int16_t     gyro_x ( decidegrees/s )
+int16_t     gyro_y ( decidegrees/s )
+int16_t     gyro_z ( decidegrees/s )
+*/
+static void crsfFrameSensorData(sbuf_t *dst)
+{
+    static uint32_t sensorFrameCount = 0;
+    sensorFrameCount++;
+
+    // Frame length: 12 bytes payload + type + crc = 14 bytes
+    sbufWriteU8(dst, CRSF_FRAME_SENSOR_PAYLOAD_SIZE + CRSF_FRAME_LENGTH_TYPE_CRC);
+    sbufWriteU8(dst, CRSF_FRAMETYPE_SENSORS);
+
+    // Get accelerometer data in milliG
+    // acc.accADC is in sensor units, we need to convert to milliG
+    // The conversion factor is acc.dev.acc_1G (typically 256 for 1G)
+    int16_t acc_x_mg = (acc.accADC.x * 1000) / acc.dev.acc_1G;
+    int16_t acc_y_mg = (acc.accADC.y * 1000) / acc.dev.acc_1G;
+    int16_t acc_z_mg = (acc.accADC.z * 1000) / acc.dev.acc_1G;
+
+    // Get gyro data in decidegrees/second
+    // gyro.gyroADCf is in degrees/second after scaling
+    int16_t gyro_x_ddps = lrintf(gyro.gyroADCf[X] * 10.0f);
+    int16_t gyro_y_ddps = lrintf(gyro.gyroADCf[Y] * 10.0f);
+    int16_t gyro_z_ddps = lrintf(gyro.gyroADCf[Z] * 10.0f);
+
+    // Write as big-endian int16 values
+    sbufWriteU16BigEndian(dst, acc_x_mg);
+    sbufWriteU16BigEndian(dst, acc_y_mg);
+    sbufWriteU16BigEndian(dst, acc_z_mg);
+    sbufWriteU16BigEndian(dst, gyro_x_ddps);
+    sbufWriteU16BigEndian(dst, gyro_y_ddps);
+    sbufWriteU16BigEndian(dst, gyro_z_ddps);
+}
+
+/*
 0x21 Flight mode text based
 Payload:
 char[]      Flight mode ( Null terminated string )
@@ -704,6 +748,7 @@ typedef enum {
     CRSF_FRAME_FLIGHT_MODE_INDEX,
     CRSF_FRAME_GPS_INDEX,
     CRSF_FRAME_VARIO_SENSOR_INDEX,
+    CRSF_FRAME_SENSOR_DATA_INDEX,
     CRSF_FRAME_HEARTBEAT_INDEX,
     CRSF_SCHEDULE_COUNT_MAX
 } crsfFrameTypeIndex_e;
@@ -796,6 +841,11 @@ static void processCrsf(void)
         crsfFinalize(dst);
     }
 #endif
+    if (currentSchedule & BIT(CRSF_FRAME_SENSOR_DATA_INDEX)) {
+        crsfInitializeFrame(dst);
+        crsfFrameSensorData(dst);
+        crsfFinalize(dst);
+    }
 
     crsfScheduleIndex = (crsfScheduleIndex + 1) % crsfScheduleCount;
 }
@@ -866,6 +916,9 @@ void initCrsfTelemetry(void)
         crsfSchedule[index++] = BIT(CRSF_FRAME_VARIO_SENSOR_INDEX);
     }
 #endif
+    if (sensors(SENSOR_ACC) && sensors(SENSOR_GYRO)) {
+        crsfSchedule[index++] = BIT(CRSF_FRAME_SENSOR_DATA_INDEX);
+    }
 
 #if defined(USE_CRSF_V3)
     while (index < (CRSF_CYCLETIME_US / CRSF_TELEMETRY_FRAME_INTERVAL_MAX_US) && index < CRSF_SCHEDULE_COUNT_MAX) {
@@ -1053,6 +1106,9 @@ int getCrsfFrame(uint8_t *frame, crsfFrameType_e frameType)
     default:
     case CRSF_FRAMETYPE_ATTITUDE:
         crsfFrameAttitude(sbuf);
+        break;
+    case CRSF_FRAMETYPE_SENSORS:
+        crsfFrameSensorData(sbuf);
         break;
     case CRSF_FRAMETYPE_BATTERY_SENSOR:
         crsfFrameBatterySensor(sbuf);
