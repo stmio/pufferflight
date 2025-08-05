@@ -436,6 +436,9 @@ static void crsfFrameAttitude(sbuf_t *dst)
     sbufWriteU16BigEndian(dst, decidegrees2Radians10000(attitude.values.pitch));
     sbufWriteU16BigEndian(dst, decidegrees2Radians10000(attitude.values.roll));
     sbufWriteU16BigEndian(dst, decidegrees2Radians10000(attitude.values.yaw));
+
+    int16_t acc_x_mg = (acc.accADC.x * 1000) / acc.dev.acc_1G;
+    sbufWriteU16BigEndian(dst, acc_x_mg);
 }
 
 /*
