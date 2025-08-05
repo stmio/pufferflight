@@ -18,6 +18,8 @@
  * If not, see <http://www.gnu.org/licenses/>.
  */
 
+#define USE_MSP_OVER_TELEMETRY
+
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
@@ -456,7 +458,6 @@ static void crsfFrameSensorData(sbuf_t *dst)
     static uint32_t sensorFrameCount = 0;
     sensorFrameCount++;
 
-    // Frame length: 12 bytes payload + type + crc = 14 bytes
     sbufWriteU8(dst, CRSF_FRAME_SENSOR_PAYLOAD_SIZE + CRSF_FRAME_LENGTH_TYPE_CRC);
     sbufWriteU8(dst, CRSF_FRAMETYPE_SENSORS);
 
